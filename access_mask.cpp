@@ -30,7 +30,7 @@ struct AccessMaskElement
     
     enum 
     {
-        ElementMask
+        ElementMask = Access::Mask | Addition::Mask,
     };
         
     
