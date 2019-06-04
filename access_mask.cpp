@@ -8,7 +8,8 @@ struct AccessMaskElement
     : boost::addable<AccessMaskElement<AccessMask, Offset>
     , boost::subtractable<AccessMaskElement<AccessMask, Offset>
     , boost::equality_comparable<AccessMaskElement<AccessMask, Offset>
-    > > >
+    , boost::less_than_comparable<AccessMaskElement<AccessMask, Offset>
+    > > > >
 {    
     struct Access
     {
@@ -16,50 +17,61 @@ struct AccessMaskElement
         {
             Deny = 1 << Offset,
             Ask = 1 << (Offset + 1),
-            Allow = 1 << (Offset + 2),
-            Mask = Deny | Ask | Allow
-        };
-    };
-    struct Addition
-    {
-        enum 
-        {
-            Log = 1 << (Offset + 3),
-            Mask = Log
+            Log  = 1 << (Offset + 2),
+            Allow = 1 << (Offset + 3),
         };
     };
     
     enum 
     {
-        ElementMask = Access::Mask | Addition::Mask,
+        ElementMask = Access::Deny | Access::Ask | Access::Log | Access::Allow,
     };
         
-    operator AccessMask() const noexcept
+
+    inline operator AccessMask() const noexcept
     {
-        return AccessMask(ElementMask & static_cast<const AccessMask&>(*this).m_mask);
+        return AccessMask(GetMask());
     }
-        
-    AccessMaskElement& operator=(const AccessMaskElement& right) noexcept
+    
+    
+    inline AccessMaskElement& operator=(const AccessMaskElement& right) noexcept
     {        
-        static_cast<AccessMask&>(*this).m_mask = ElementMask & static_cast<const AccessMask&>(right).m_mask;        
+        reset() + right;        
         return *this;
     }
     
-    AccessMaskElement& operator+=(const AccessMaskElement& right) noexcept
+    inline AccessMaskElement& operator+=(const AccessMaskElement& right) noexcept
     {        
-        static_cast<AccessMask&>(*this).m_mask |= ElementMask & static_cast<const AccessMask&>(right).m_mask;        
+        static_cast<AccessMask&>(*this).m_mask |= right.GetMask();        
         return *this;
     }
     
-    AccessMaskElement& operator-=(const AccessMaskElement& right) noexcept
+    inline AccessMaskElement& operator-=(const AccessMaskElement& right) noexcept
     {
-        static_cast<AccessMask&>(*this).m_mask &= ~(ElementMask & static_cast<const AccessMask&>(right).m_mask);         
+        static_cast<AccessMask&>(*this).m_mask &= ~right.GetMask();         
         return *this;
     }
     
-    bool operator==(const AccessMaskElement& right) noexcept
+    inline bool operator==(const AccessMaskElement& right) noexcept
     {
-        return (ElementMask & static_cast<AccessMask&>(*this).m_mask) == (ElementMask & static_cast<const AccessMask&>(right).m_mask);         
+        return GetMask() == right.GetMask();         
+    }
+    
+    inline bool operator<(const AccessMaskElement& right) noexcept
+    {
+        return GetMask() > right.GetMask();         
+    }    
+    
+    AccessMaskElement& reset() noexcept
+    {
+         static_cast<AccessMask&>(*this).m_mask &= ~ElementMask;
+         return *this;
+    }
+    
+private:
+    inline auto GetMask() const noexcept
+    {
+        return ElementMask & static_cast<const AccessMask&>(*this).m_mask;
     }
 };
 
@@ -87,19 +99,19 @@ struct AccessMask
         : m_mask(mask)
     {}
     
-    AccessMask& operator+=(const AccessMask& right) noexcept
+    inline AccessMask& operator+=(const AccessMask& right) noexcept
     {        
         m_mask |= right.m_mask;        
         return *this;
     }
     
-    AccessMask& operator-=(const AccessMask& right) noexcept
+    inline AccessMask& operator-=(const AccessMask& right) noexcept
     {
         m_mask &= ~right.m_mask;         
         return *this;
     }    
     
-    bool operator==(const AccessMask& right) noexcept
+    inline bool operator==(const AccessMask& right) noexcept
     {
         return m_mask == right.m_mask;         
     }
@@ -113,7 +125,7 @@ int main()
     allow.m_mask = AccessMask::PrivilegeMask::Access::Allow;
     ask.m_mask = AccessMask::PrivilegeMask::Access::Ask;
     deny.m_mask = AccessMask::PrivilegeMask::Access::Deny;
-    log.m_mask = AccessMask::PrivilegeMask::Addition::Log;
+    log.m_mask = AccessMask::PrivilegeMask::Access::Log;
     
     AccessMask tmp(inherite + allow);
     std::cout << std::bitset<16>(tmp.m_mask) << "\n";
