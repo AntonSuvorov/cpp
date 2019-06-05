@@ -1,5 +1,6 @@
 #include <iostream>
 #include <bitset>
+#include <tuple>
 #include <boost/operators.hpp>
 
 
@@ -9,7 +10,9 @@ struct AccessMaskElement
     , boost::subtractable<AccessMaskElement<AccessMask, Offset>
     , boost::equality_comparable<AccessMaskElement<AccessMask, Offset>
     , boost::less_than_comparable<AccessMaskElement<AccessMask, Offset>
-    > > > >
+    , boost::dividable<AccessMaskElement<AccessMask, Offset>
+    , boost::modable<AccessMaskElement<AccessMask, Offset>
+    > > > > > >
 {    
     struct Access
     {
@@ -28,7 +31,7 @@ struct AccessMaskElement
     };
         
 
-    inline operator AccessMask() const noexcept
+    constexpr inline operator AccessMask() const noexcept
     {
         return AccessMask(GetMask());
     }
@@ -52,12 +55,24 @@ struct AccessMaskElement
         return *this;
     }
     
-    inline bool operator==(const AccessMaskElement& right) noexcept
+    inline AccessMaskElement& operator /=(const AccessMaskElement& right) noexcept
+    {
+        static_cast<AccessMask&>(*this).m_mask = ~(GetMask() ^ right.GetMask());         
+        return *this;
+    }
+    
+    inline AccessMaskElement& operator %=(const AccessMaskElement& right) noexcept
+    {
+        static_cast<AccessMask&>(*this).m_mask ^= right.GetMask();         
+        return *this;
+    }
+    
+    inline bool operator==(const AccessMaskElement& right) const noexcept
     {
         return GetMask() == right.GetMask();         
     }
     
-    inline bool operator<(const AccessMaskElement& right) noexcept
+    inline bool operator<(const AccessMaskElement& right) const noexcept
     {
         return GetMask() > right.GetMask();         
     }    
@@ -69,7 +84,7 @@ struct AccessMaskElement
     }
     
 private:
-    inline auto GetMask() const noexcept
+    constexpr inline auto GetMask() const noexcept
     {
         return ElementMask & static_cast<const AccessMask&>(*this).m_mask;
     }
@@ -83,7 +98,10 @@ struct AccessMask
     , boost::addable<AccessMask
     , boost::subtractable<AccessMask
     , boost::equality_comparable<AccessMask
-    > > >
+    , boost::less_than_comparable<AccessMask
+    , boost::dividable<AccessMask
+    , boost::modable<AccessMask
+    > > > > > >
 {
     using PrivilegeMask = AccessMaskElement<AccessMask, 0>;
     using WriteMask = PrivilegeMask;
@@ -95,7 +113,7 @@ struct AccessMask
     
     AccessMask() = default;
     
-    explicit AccessMask(uint16_t mask) noexcept
+    constexpr explicit AccessMask(uint16_t mask) noexcept
         : m_mask(mask)
     {}
     
@@ -111,10 +129,30 @@ struct AccessMask
         return *this;
     }    
     
-    inline bool operator==(const AccessMask& right) noexcept
+    inline AccessMask& operator /=(const AccessMask& right) noexcept
+    {
+        m_mask = ~(m_mask ^ right.m_mask);         
+        return *this;
+    }
+    
+    inline AccessMask& operator %=(const AccessMask& right) noexcept
+    {
+        m_mask ^= right.m_mask;         
+        return *this;
+    }
+    
+    constexpr inline bool operator==(const AccessMask& right) const noexcept
     {
         return m_mask == right.m_mask;         
     }
+    
+    inline bool operator<(const AccessMask& right) const noexcept
+    {
+        return static_cast<const WriteMask&>(*this) < static_cast<const WriteMask&>(right) 
+        &&  static_cast<const ReadMask&>(*this) < static_cast<const ReadMask&>(right)
+        &&  static_cast<const CreateMask&>(*this) < static_cast<const CreateMask&>(right)
+        &&  static_cast<const DeleteMask&>(*this) < static_cast<const DeleteMask&>(right);
+    } 
 };
 
 
@@ -126,6 +164,10 @@ int main()
     ask.m_mask = AccessMask::PrivilegeMask::Access::Ask;
     deny.m_mask = AccessMask::PrivilegeMask::Access::Deny;
     log.m_mask = AccessMask::PrivilegeMask::Access::Log;
+ 
+    static_assert(AccessMask() == AccessMask(), "==");
+    static_assert(AccessMask(AccessMask::PrivilegeMask::Access::Allow) != AccessMask(AccessMask::PrivilegeMask::Access::Ask), "Allow != Ask");
+    
     
     AccessMask tmp(inherite + allow);
     std::cout << std::bitset<16>(tmp.m_mask) << "\n";
