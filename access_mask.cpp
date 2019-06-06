@@ -18,10 +18,10 @@ struct AccessMaskElement
     {
         enum 
         {
-            Deny = 1 << Offset,
-            Ask = 1 << (Offset + 1),
-            Log  = 1 << (Offset + 2),
-            Allow = 1 << (Offset + 3),
+            Allow = 1 << Offset,
+            Log = 1 << (Offset + 1),
+            Ask  = 1 << (Offset + 2),
+            Deny = 1 << (Offset + 3),
         };
     };
     
@@ -31,7 +31,7 @@ struct AccessMaskElement
     };
         
 
-    constexpr inline operator AccessMask() const noexcept
+    inline operator AccessMask() const noexcept
     {
         return AccessMask(GetMask());
     }
@@ -74,7 +74,7 @@ struct AccessMaskElement
     
     inline bool operator<(const AccessMaskElement& right) const noexcept
     {
-        return GetMask() > right.GetMask();         
+        return GetMask() < right.GetMask();         
     }    
     
     AccessMaskElement& reset() noexcept
@@ -131,7 +131,7 @@ struct AccessMask
     
     inline AccessMask& operator /=(const AccessMask& right) noexcept
     {
-        m_mask = ~(m_mask ^ right.m_mask);         
+        m_mask &= (m_mask ^ right.m_mask);         
         return *this;
     }
     
@@ -141,20 +141,22 @@ struct AccessMask
         return *this;
     }
     
-    constexpr inline bool operator==(const AccessMask& right) const noexcept
+    inline bool operator==(const AccessMask& right) const noexcept
     {
         return m_mask == right.m_mask;         
     }
     
     inline bool operator<(const AccessMask& right) const noexcept
     {
-        return static_cast<const WriteMask&>(*this) < static_cast<const WriteMask&>(right) 
-        &&  static_cast<const ReadMask&>(*this) < static_cast<const ReadMask&>(right)
-        &&  static_cast<const CreateMask&>(*this) < static_cast<const CreateMask&>(right)
-        &&  static_cast<const DeleteMask&>(*this) < static_cast<const DeleteMask&>(right);
+        return m_mask != right.m_mask
+        &&  static_cast<const WriteMask&>(*this) <= static_cast<const WriteMask&>(right) 
+        &&  static_cast<const ReadMask&>(*this) <= static_cast<const ReadMask&>(right)
+        &&  static_cast<const CreateMask&>(*this) <= static_cast<const CreateMask&>(right)
+        &&  static_cast<const DeleteMask&>(*this) <= static_cast<const DeleteMask&>(right);
     } 
 };
 
+#define TEST(check) std::cout << (check) << " - " #check << "\n"
 
 
 int main()
@@ -165,25 +167,26 @@ int main()
     deny.m_mask = AccessMask::PrivilegeMask::Access::Deny;
     log.m_mask = AccessMask::PrivilegeMask::Access::Log;
  
-    static_assert(AccessMask() == AccessMask(), "==");
-    static_assert(AccessMask(AccessMask::PrivilegeMask::Access::Allow) != AccessMask(AccessMask::PrivilegeMask::Access::Ask), "Allow != Ask");
-    
-    
-    AccessMask tmp(inherite + allow);
-    std::cout << std::bitset<16>(tmp.m_mask) << "\n";
-    
-    tmp -= allow;
-    std::cout << std::bitset<16>(tmp.m_mask) << "\n";
-    
-    static_cast<AccessMask::PrivilegeMask&>(tmp) += static_cast<const AccessMask::PrivilegeMask&>(ask);
-    std::cout << std::bitset<16>(tmp.m_mask) << "\n";
-    
-    static_cast<AccessMask::PrivilegeMask&>(tmp) -= ask;
-    std::cout << std::bitset<16>(tmp.m_mask) << "\n";
-    
-    tmp += static_cast<const AccessMask::PrivilegeMask&>(ask);
-    std::cout << std::bitset<16>(tmp.m_mask) << "\n";
-    
-    allow == ask;
+    TEST(inherite == inherite);
+    TEST(allow != ask);
+    TEST(ask == ask);
+    TEST(allow + ask == AccessMask(AccessMask::PrivilegeMask::Access::Allow | AccessMask::PrivilegeMask::Access::Ask));
+    TEST(allow + log + ask + deny == AccessMask(AccessMask::PrivilegeMask::ElementMask));
+    TEST(AccessMask(AccessMask::PrivilegeMask::ElementMask) - ask == AccessMask(AccessMask::PrivilegeMask::Access::Allow | AccessMask::PrivilegeMask::Access::Log | AccessMask::PrivilegeMask::Access::Deny));
+    TEST(inherite < allow);
+    TEST(allow < log);
+    TEST(log < ask);
+    TEST(ask < deny);
+    TEST(ask < ask + log);
+    TEST(allow == allow / allow);
+    TEST(inherite == ask / allow);
+    TEST(inherite == allow / ask);
+    TEST(allow == (allow + log) / allow);
+    TEST(inherite == allow % allow);
+    TEST(deny + log == ask % allow);
+    TEST(deny + log == allow % ask);
+
+    std::cout << std::bitset<16>(((ask + allow) / allow).m_mask) << "\n";
+
     return 0;
 }
